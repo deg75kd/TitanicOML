@@ -47,12 +47,12 @@ Connect to the database as dmuser (I used SQL Plus) and run the script.
 
 * [Oracle VM VirtualBox](https://www.oracle.com/virtualization/virtualbox/) - The virtual software used
 * [Oracle Developer Day - Hands-on Database Application Development](https://www.oracle.com/database/technologies/databaseappdev-vm.html) - The pre-built virtual machine used
-* [Oracle Database 19.3] - Database with built-in machine learning tools
-* [Oracle SQL Developer 19.1] - GUI tool required for installing required components
+* Oracle Database 19.3 - Database with built-in machine learning tools
+* Oracle SQL Developer 19.1 - GUI tool required for installing required components
 
 ## Authors
 
-* **Kevin DeJesus** - *Initial work* - [PurpleBooth](https://github.com/PurpleBooth)
+* **Kevin DeJesus** - *Initial work* - [deg75kd](https://github.com/deg75kd)
 
 ## License
 
