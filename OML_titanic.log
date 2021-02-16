@@ -1,0 +1,2291 @@
+DMUSER@orcl 14-FEB-21 22:52> 
+DMUSER@orcl 14-FEB-21 22:52> alter session set nls_date_format='DD-MON-YYYY HH24:MI';
+
+Session altered.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- ###############
+DMUSER@orcl 14-FEB-2021 22:52> -- # Import Data #
+DMUSER@orcl 14-FEB-2021 22:52> -- ###############
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- drop external table
+DMUSER@orcl 14-FEB-2021 22:52> DECLARE
+  2    v_table	 VARCHAR2(30) := 'titanic_train_ext';
+  3    sql_stmt  VARCHAR2(200);
+  4  BEGIN
+  5    sql_stmt := 'drop table '|| v_table;
+  6    EXECUTE IMMEDIATE sql_stmt;
+  7    dbms_output.put_line('Dropped table: '|| v_table);
+  8  EXCEPTION
+  9    WHEN others THEN
+ 10  	 dbms_output.put_line('Table '|| v_table ||' does not exist.');
+ 11  END;
+ 12  /
+Dropped table: titanic_train_ext
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- create external table
+DMUSER@orcl 14-FEB-2021 22:52> create table titanic_train_ext (
+  2    PassengerId   NUMBER,
+  3    Survived      NUMBER,
+  4    Pclass	     NUMBER,
+  5    Name	     VARCHAR2(128),
+  6    Sex	     VARCHAR2(8),
+  7    Age	     NUMBER,
+  8    SibSp	     NUMBER,
+  9    Parch	     NUMBER,
+ 10    Ticket	     VARCHAR2(20),
+ 11    Fare	     NUMBER,
+ 12    Cabin	     VARCHAR2(15),
+ 13    Embarked      VARCHAR2(3)
+ 14  )
+ 15    organization external (
+ 16  	     type   ORACLE_LOADER
+ 17  	     default directory titanic_dir
+ 18  	     access parameters (
+ 19  		records delimited by NEWLINE
+ 20  		skip 1
+ 21  		badfile titanic_dir:'titanic_train.bad'
+ 22  		nodiscardfile
+ 23  		logfile titanic_dir:'titanic_train.log'
+ 24  		fields terminated by ',' optionally enclosed by '"'
+ 25  		reject rows with all null fields
+ 26  		(
+ 27  		  "PASSENGERID",
+ 28  		  "SURVIVED",
+ 29  		  "PCLASS",
+ 30  		  "NAME",
+ 31  		  "SEX",
+ 32  		  "AGE",
+ 33  		  "SIBSP",
+ 34  		  "PARCH",
+ 35  		  "TICKET",
+ 36  		  "FARE",
+ 37  		  "CABIN",
+ 38  		  "EMBARKED"
+ 39  		)
+ 40  	     )
+ 41  	     location ('train.csv')
+ 42    )
+ 43  reject limit unlimited;
+
+Table created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- confirm data
+DMUSER@orcl 14-FEB-2021 22:52> select count(*) from titanic_train_ext ;
+
+  COUNT(*)
+----------
+       891
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> col name format a30
+DMUSER@orcl 14-FEB-2021 22:52> select * from titanic_train_ext where rownum<=5;
+
+PASSENGERID   SURVIVED     PCLASS NAME                           SEX             AGE      SIBSP      PARCH TICKET                     FARE CABIN           EMB
+----------- ---------- ---------- ------------------------------ -------- ---------- ---------- ---------- -------------------- ---------- --------------- ---
+          1          0          3 Braund, Mr. Owen Harris        male             22          1          0 A/5 21171                  7.25                 S
+          2          1          1 Cumings, Mrs. John Bradley (Fl female           38          1          0 PC 17599                71.2833 C85             C
+                                  orence Briggs Thayer)
+
+          3          1          3 Heikkinen, Miss. Laina         female           26          0          0 STON/O2. 3101282          7.925                 S
+          4          1          1 Futrelle, Mrs. Jacques Heath ( female           35          1          0 113803                     53.1 C123            S
+                                  Lily May Peel)
+
+          5          0          3 Allen, Mr. William Henry       male             35          0          0 373450                     8.05                 S
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- confirm data types
+DMUSER@orcl 14-FEB-2021 22:52> desc titanic_train_ext
+ Name                                                                                                              Null?    Type
+ ----------------------------------------------------------------------------------------------------------------- -------- ----------------------------------------------------------------------------
+ PASSENGERID                                                                                                                NUMBER
+ SURVIVED                                                                                                                   NUMBER
+ PCLASS                                                                                                                     NUMBER
+ NAME                                                                                                                       VARCHAR2(128)
+ SEX                                                                                                                        VARCHAR2(8)
+ AGE                                                                                                                        NUMBER
+ SIBSP                                                                                                                      NUMBER
+ PARCH                                                                                                                      NUMBER
+ TICKET                                                                                                                     VARCHAR2(20)
+ FARE                                                                                                                       NUMBER
+ CABIN                                                                                                                      VARCHAR2(15)
+ EMBARKED                                                                                                                   VARCHAR2(3)
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- create internal table to improve performance
+DMUSER@orcl 14-FEB-2021 22:52> DECLARE
+  2    v_table	 VARCHAR2(30) := 'titanic_train';
+  3    sql_stmt  VARCHAR2(200);
+  4  BEGIN
+  5    sql_stmt := 'drop table '|| v_table;
+  6    EXECUTE IMMEDIATE sql_stmt;
+  7    dbms_output.put_line('Dropped table: '|| v_table);
+  8  EXCEPTION
+  9    WHEN others THEN
+ 10  	 dbms_output.put_line('Table '|| v_table ||' does not exist.');
+ 11  END;
+ 12  /
+Dropped table: titanic_train
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> create table titanic_train as
+  2    select * from titanic_train_ext;
+
+Table created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- confirm data
+DMUSER@orcl 14-FEB-2021 22:52> select count(*) from titanic_train;
+
+  COUNT(*)
+----------
+       891
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> col name format a30
+DMUSER@orcl 14-FEB-2021 22:52> select * from titanic_train where rownum<=5;
+
+PASSENGERID   SURVIVED     PCLASS NAME                           SEX             AGE      SIBSP      PARCH TICKET                     FARE CABIN           EMB
+----------- ---------- ---------- ------------------------------ -------- ---------- ---------- ---------- -------------------- ---------- --------------- ---
+          1          0          3 Braund, Mr. Owen Harris        male             22          1          0 A/5 21171                  7.25                 S
+          2          1          1 Cumings, Mrs. John Bradley (Fl female           38          1          0 PC 17599                71.2833 C85             C
+                                  orence Briggs Thayer)
+
+          3          1          3 Heikkinen, Miss. Laina         female           26          0          0 STON/O2. 3101282          7.925                 S
+          4          1          1 Futrelle, Mrs. Jacques Heath ( female           35          1          0 113803                     53.1 C123            S
+                                  Lily May Peel)
+
+          5          0          3 Allen, Mr. William Henry       male             35          0          0 373450                     8.05                 S
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- confirm data types
+DMUSER@orcl 14-FEB-2021 22:52> desc titanic_train
+ Name                                                                                                              Null?    Type
+ ----------------------------------------------------------------------------------------------------------------- -------- ----------------------------------------------------------------------------
+ PASSENGERID                                                                                                                NUMBER
+ SURVIVED                                                                                                                   NUMBER
+ PCLASS                                                                                                                     NUMBER
+ NAME                                                                                                                       VARCHAR2(128)
+ SEX                                                                                                                        VARCHAR2(8)
+ AGE                                                                                                                        NUMBER
+ SIBSP                                                                                                                      NUMBER
+ PARCH                                                                                                                      NUMBER
+ TICKET                                                                                                                     VARCHAR2(20)
+ FARE                                                                                                                       NUMBER
+ CABIN                                                                                                                      VARCHAR2(15)
+ EMBARKED                                                                                                                   VARCHAR2(3)
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- #############################
+DMUSER@orcl 14-FEB-2021 22:52> -- # Exploratory Data Analysis #
+DMUSER@orcl 14-FEB-2021 22:52> -- #############################
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- create tables for storing table stats
+DMUSER@orcl 14-FEB-2021 22:52> create or replace procedure dm_create_stats_tbl_proc
+  2    (p_owner IN VARCHAR2, p_data_table IN VARCHAR2)
+  3  AUTHID CURRENT_USER is
+  4    v_max_varchar  NUMBER;
+  5    select_sql  VARCHAR2(500);
+  6    table_sql   VARCHAR2(500);
+  7    drop_sql    VARCHAR2(500);
+  8  begin
+  9    BEGIN
+ 10  	 drop_sql := 'drop table '||p_data_table||'_char_stats';
+ 11  	 EXECUTE IMMEDIATE drop_sql;
+ 12  	 dbms_output.put_line('Table '||p_data_table||'_char_stats has been dropped');
+ 13    EXCEPTION
+ 14  	 WHEN others THEN
+ 15  	   dbms_output.put_line('Table '||p_data_table||'_char_stats does not exist.');
+ 16    END;
+ 17  
+ 18    BEGIN
+ 19  	 drop_sql := 'drop table '||p_data_table||'_num_stats';
+ 20  	 EXECUTE IMMEDIATE drop_sql;
+ 21  	 dbms_output.put_line('Table '||p_data_table||'_num_stats has been dropped');
+ 22    EXCEPTION
+ 23  	 WHEN others THEN
+ 24  	   dbms_output.put_line('Table '||p_data_table||'_num_stats does not exist.');
+ 25    END;
+ 26  
+ 27    BEGIN
+ 28  	 select_sql := 'select max(DATA_LENGTH)
+ 29  			from all_tab_cols where owner=upper('''||p_owner||''')
+ 30  			and table_name=upper('''||p_data_table||''')
+ 31  			and DATA_TYPE=''VARCHAR2''';
+ 32  	 dbms_output.put_line(select_sql);
+ 33  	 execute immediate select_sql into v_max_varchar;
+ 34  	 dbms_output.put_line('Max data length is '||v_max_varchar);
+ 35  
+ 36  	 -- create numeric table
+ 37  	 table_sql := 'CREATE TABLE '||p_data_table||'_num_stats (
+ 38  	   COLUMN_NAME VARCHAR2(128),
+ 39  	   "COUNT" NUMBER,
+ 40  	   mean    NUMBER,
+ 41  	   std	   NUMBER,
+ 42  	   "MIN"   NUMBER,
+ 43  	   "25%"   NUMBER,
+ 44  	   "50%"   NUMBER,
+ 45  	   "75%"   NUMBER,
+ 46  	   "MAX"   NUMBER)';
+ 47  	 dbms_output.put_line(table_sql);
+ 48  	 execute immediate table_sql;
+ 49  
+ 50  	 -- create text table
+ 51  	 table_sql := 'CREATE TABLE '||p_data_table||'_char_stats (
+ 52  	   COLUMN_NAME VARCHAR2(128),
+ 53  	   "COUNT"  NUMBER,
+ 54  	   "UNIQUE" NUMBER,
+ 55  	   top	  VARCHAR2('||v_max_varchar||'),
+ 56  	   freq   NUMBER)';
+ 57  	 dbms_output.put_line(table_sql);
+ 58  	 execute immediate table_sql;
+ 59    END;
+ 60  end;
+ 61  /
+
+Procedure created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> exec dm_create_stats_tbl_proc('DMUSER','titanic_train');
+Table titanic_train_char_stats has been dropped
+Table titanic_train_num_stats has been dropped
+select max(DATA_LENGTH)
+                   from all_tab_cols where owner=upper('DMUSER')
+                   and table_name=upper('titanic_train')
+                   and DATA_TYPE='VARCHAR2'
+Max data length is 128
+CREATE TABLE titanic_train_num_stats (
+      COLUMN_NAME VARCHAR2(128),
+      "COUNT" NUMBER,
+      mean    NUMBER,
+      std     NUMBER,
+      "MIN"   NUMBER,
+      "25%"   NUMBER,
+      "50%"
+NUMBER,
+      "75%"   NUMBER,
+      "MAX"   NUMBER)
+CREATE TABLE titanic_train_char_stats (
+      COLUMN_NAME VARCHAR2(128),
+      "COUNT"  NUMBER,
+      "UNIQUE" NUMBER,
+      top    VARCHAR2(128),
+      freq   NUMBER)
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> desc titanic_train_char_stats;
+ Name                                                                                                              Null?    Type
+ ----------------------------------------------------------------------------------------------------------------- -------- ----------------------------------------------------------------------------
+ COLUMN_NAME                                                                                                                VARCHAR2(128)
+ COUNT                                                                                                                      NUMBER
+ UNIQUE                                                                                                                     NUMBER
+ TOP                                                                                                                        VARCHAR2(128)
+ FREQ                                                                                                                       NUMBER
+
+DMUSER@orcl 14-FEB-2021 22:52> desc titanic_train_num_stats;
+ Name                                                                                                              Null?    Type
+ ----------------------------------------------------------------------------------------------------------------- -------- ----------------------------------------------------------------------------
+ COLUMN_NAME                                                                                                                VARCHAR2(128)
+ COUNT                                                                                                                      NUMBER
+ MEAN                                                                                                                       NUMBER
+ STD                                                                                                                        NUMBER
+ MIN                                                                                                                        NUMBER
+ 25%                                                                                                                        NUMBER
+ 50%                                                                                                                        NUMBER
+ 75%                                                                                                                        NUMBER
+ MAX                                                                                                                        NUMBER
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- populate statistics tables
+DMUSER@orcl 14-FEB-2021 22:52> create or replace procedure dm_populate_stats_tbl_proc
+  2    (p_owner    IN VARCHAR2,
+  3  	p_data_tbl IN VARCHAR2,
+  4  	p_num_tbl  IN VARCHAR2,
+  5  	p_char_tbl IN VARCHAR2)
+  6  AUTHID CURRENT_USER is
+  7    table_sql   VARCHAR2(500);
+  8    insert_sql  VARCHAR2(500);
+  9    select_sql  VARCHAR2(500);
+ 10    trunc_sql   VARCHAR2(500);
+ 11    v_count	   NUMBER;
+ 12    v_unique    NUMBER;
+ 13    v_top	   VARCHAR2(128);
+ 14    v_freq	   VARCHAR2(128);
+ 15    s	   DBMS_STAT_FUNCS.SummaryType;
+ 16  begin
+ 17    BEGIN
+ 18  	 trunc_sql := 'truncate table '||p_num_tbl;
+ 19  	 execute immediate trunc_sql;
+ 20  	 dbms_output.put_line('Truncated: '||p_num_tbl);
+ 21    EXCEPTION
+ 22  	 WHEN others THEN
+ 23  	   dbms_output.put_line('Table '||p_num_tbl||' does not exist.');
+ 24    END;
+ 25  
+ 26    BEGIN
+ 27  	 trunc_sql := 'truncate table '||p_char_tbl;
+ 28  	 execute immediate trunc_sql;
+ 29  	 dbms_output.put_line('Truncated: '||p_char_tbl);
+ 30    EXCEPTION
+ 31  	 WHEN others THEN
+ 32  	   dbms_output.put_line('Table '||p_char_tbl||' does not exist.');
+ 33    END;
+ 34  
+ 35  	 For tab_cols_c
+ 36  	   IN (select COLUMN_NAME, DATA_TYPE
+ 37  	       from all_tab_cols
+ 38  	       where owner=upper(p_owner)
+ 39  	       and table_name=upper(p_data_tbl))
+ 40  	 LOOP
+ 41  	   if (tab_cols_c.data_type = 'VARCHAR2') then
+ 42  	     execute immediate 'select count('||tab_cols_c.column_name||') from '||p_data_tbl INTO v_count;
+ 43  	     execute immediate 'select count(distinct '||tab_cols_c.column_name||') from '||p_data_tbl INTO v_unique;
+ 44  	     execute immediate 'select stats_mode('||tab_cols_c.column_name||') from '||p_data_tbl INTO v_top;
+ 45  
+ 46  	     select_sql := 'select count(*) from '||p_data_tbl||' where '||tab_cols_c.column_name||'='''||v_top||'''';
+ 47  	     execute immediate select_sql INTO v_freq;
+ 48  
+ 49  	     insert_sql := 'insert into '||p_char_tbl||' (COLUMN_NAME, "COUNT", "UNIQUE", TOP, FREQ)
+ 50  			    values ('''||tab_cols_c.column_name||''','||v_count||','||v_unique||','''||v_top||''','||v_freq||')';
+ 51  	     execute immediate insert_sql;
+ 52  	     commit;
+ 53  
+ 54  	   else
+ 55  	     DBMS_STAT_FUNCS.SUMMARY(p_owner,p_data_tbl,tab_cols_c.column_name,3,s);
+ 56  
+ 57  	     insert_sql := 'insert into '||p_num_tbl||' (COLUMN_NAME, "COUNT", mean, std, "MIN", "25%", "50%", "75%", "MAX")
+ 58  			    values ('''||tab_cols_c.column_name||''','||s.count||','||s.mean||','||s.stddev||','||s.min||','||s.quantile_25||','||s.median||','||s.quantile_75||','||s.max||')';
+ 59  	     execute immediate insert_sql;
+ 60  	     commit;
+ 61  
+ 62  	   end if;
+ 63  	 end loop;
+ 64  end;
+ 65  /
+
+Procedure created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> exec dm_populate_stats_tbl_proc(-
+>   p_owner    => 'DMUSER',-
+>   p_data_tbl => 'titanic_train',-
+>   p_num_tbl  => 'titanic_train_num_stats',-
+>   p_char_tbl => 'titanic_train_char_stats');
+Truncated: titanic_train_num_stats
+Truncated: titanic_train_char_stats
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> col column_name format a15
+DMUSER@orcl 14-FEB-2021 22:52> col count format 999,990
+DMUSER@orcl 14-FEB-2021 22:52> select COLUMN_NAME,
+  2  	    "COUNT",
+  3  	    round(MEAN,3) MEAN,
+  4  	    round(STD,3) STD,
+  5  	    round("MIN",3) "MIN",
+  6  	    round("25%",3) "25%",
+  7  	    round("50%",3) "50%",
+  8  	    round("75%",3) "75%",
+  9  	    round("MAX",3) "MAX"
+ 10  from titanic_train_num_stats;
+
+COLUMN_NAME        COUNT       MEAN        STD        MIN        25%        50%        75%        MAX
+--------------- -------- ---------- ---------- ---------- ---------- ---------- ---------- ----------
+PASSENGERID          891        446    257.354          1      223.5        446      668.5        891
+SURVIVED             891       .384       .487          0          0          0          1          1
+PCLASS               891      2.309       .836          1          2          3          3          3
+AGE                  714     29.699     14.526        .42     20.125         28         38         80
+SIBSP                891       .523      1.103          0          0          0          1          8
+PARCH                891       .382       .806          0          0          0          0          6
+FARE                 891     32.204     49.693          0       7.91     14.454         31    512.329
+
+7 rows selected.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> col column_name format a15
+DMUSER@orcl 14-FEB-2021 22:52> col top format a40
+DMUSER@orcl 14-FEB-2021 22:52> select * from titanic_train_char_stats;
+
+COLUMN_NAME        COUNT     UNIQUE TOP                                            FREQ
+--------------- -------- ---------- ---------------------------------------- ----------
+NAME                 891        891 Abbing, Mr. Anthony                               1
+SEX                  891          2 male                                            577
+TICKET               891        681 1601                                              7
+CABIN                204        147 B96 B98                                           4
+EMBARKED             889          3 S                                              644
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- check for missing data
+DMUSER@orcl 14-FEB-2021 22:52> create or replace procedure dm_create_null_tbl_proc
+  2    (p_owner IN VARCHAR2, p_data_tbl IN VARCHAR2)
+  3  AUTHID CURRENT_USER is
+  4    v_null_tbl VARCHAR2(128);
+  5    insert_sql  VARCHAR2(500);
+  6    select_sql  VARCHAR2(500);
+  7    drop_sql    VARCHAR2(500);
+  8    create_sql  VARCHAR2(500);
+  9    v_null_ct   NUMBER;
+ 10    v_total_ct  NUMBER;
+ 11    v_pct_null  NUMBER;
+ 12  begin
+ 13    v_null_tbl := p_data_tbl||'_null_ct';
+ 14  
+ 15    BEGIN
+ 16  	 drop_sql := 'drop table '||v_null_tbl;
+ 17  	 execute immediate drop_sql;
+ 18  	 dbms_output.put_line('Dropped: '||v_null_tbl);
+ 19    EXCEPTION
+ 20  	 WHEN others THEN
+ 21  	   dbms_output.put_line('Table '||v_null_tbl||' does not exist.');
+ 22    END;
+ 23  
+ 24    create_sql := 'CREATE TABLE '||v_null_tbl|| '(
+ 25  			COLUMN_NAME  VARCHAR2(128),
+ 26  			NULL_CT      NUMBER,
+ 27  			PCT_NULL     NUMBER)';
+ 28    execute immediate create_sql;
+ 29  
+ 30    select_sql := 'select count(*) from '||p_data_tbl;
+ 31    execute immediate select_sql into v_total_ct;
+ 32  
+ 33    For tab_cols_c
+ 34  	 IN (select COLUMN_NAME
+ 35  	     from all_tab_cols
+ 36  	     where owner=upper(p_owner)
+ 37  	     and table_name=upper(p_data_tbl))
+ 38    LOOP
+ 39  	 select_sql := 'select count(*) - count('||tab_cols_c.column_name||') from '||p_data_tbl;
+ 40  	 execute immediate select_sql into v_null_ct;
+ 41  
+ 42  	 IF (v_null_ct > 0) THEN
+ 43  	   select round((v_null_ct/v_total_ct)*100,0) into v_pct_null from dual;
+ 44  	   insert_sql := 'insert into '||v_null_tbl||' (COLUMN_NAME, NULL_CT, PCT_NULL)
+ 45  			  values ('''||tab_cols_c.column_name||''','||v_null_ct||','||v_pct_null||')';
+ 46  	   execute immediate insert_sql;
+ 47  	   commit;
+ 48  	 END IF;
+ 49    END LOOP;
+ 50  end;
+ 51  /
+
+Procedure created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> exec dm_create_null_tbl_proc('DMUSER','TITANIC_TRAIN');
+Dropped: TITANIC_TRAIN_null_ct
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> select * from titanic_train_null_ct;
+
+COLUMN_NAME        NULL_CT   PCT_NULL
+--------------- ---------- ----------
+AGE                    177         20
+CABIN                  687         77
+EMBARKED                 2          0
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- Exclude the Cabin column
+DMUSER@orcl 14-FEB-2021 22:52> CREATE OR REPLACE VIEW titanic_train_eda_vw AS
+  2    SELECT PASSENGERID, SURVIVED, PCLASS, NAME, SEX, AGE, SIBSP, PARCH, TICKET, FARE, EMBARKED
+  3    FROM   titanic_train;
+
+View created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> desc titanic_train_eda_vw
+ Name                                                                                                              Null?    Type
+ ----------------------------------------------------------------------------------------------------------------- -------- ----------------------------------------------------------------------------
+ PASSENGERID                                                                                                                NUMBER
+ SURVIVED                                                                                                                   NUMBER
+ PCLASS                                                                                                                     NUMBER
+ NAME                                                                                                                       VARCHAR2(128)
+ SEX                                                                                                                        VARCHAR2(8)
+ AGE                                                                                                                        NUMBER
+ SIBSP                                                                                                                      NUMBER
+ PARCH                                                                                                                      NUMBER
+ TICKET                                                                                                                     VARCHAR2(20)
+ FARE                                                                                                                       NUMBER
+ EMBARKED                                                                                                                   VARCHAR2(3)
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- Fill in the missing age values with the mean
+DMUSER@orcl 14-FEB-2021 22:52> CREATE OR REPLACE VIEW titanic_train_eda_vw AS
+  2    SELECT PASSENGERID, SURVIVED, PCLASS, NAME, SEX,
+  3  	      NVL(AGE, a.AVG_AGE) AGE,
+  4  	      SIBSP, PARCH, TICKET, FARE, EMBARKED
+  5    FROM   titanic_train,
+  6  	      (SELECT avg(age) AVG_AGE
+  7  	       FROM   titanic_train) a;
+
+View created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> select tbl.PASSENGERID, tbl.AGE, vw.AGE
+  2  from   titanic_train_eda_vw vw,
+  3  	    titanic_train tbl
+  4  where  vw.PASSENGERID=tbl.PASSENGERID
+  5  and    tbl.PASSENGERID in
+  6  	    (select PASSENGERID from titanic_train
+  7  	     where AGE is null)
+  8  and    rownum<6;
+
+PASSENGERID        AGE        AGE
+----------- ---------- ----------
+          6            29.6991176
+         18            29.6991176
+         20            29.6991176
+         27            29.6991176
+         29            29.6991176
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- Replace the missing values of Embarked with the mode
+DMUSER@orcl 14-FEB-2021 22:52> CREATE OR REPLACE VIEW titanic_train_eda_vw AS
+  2    SELECT PASSENGERID, SURVIVED, PCLASS, NAME, SEX,
+  3  	      NVL(AGE, a.AVG_AGE) AGE,
+  4  	      SIBSP, PARCH, TICKET, FARE,
+  5  	      NVL(EMBARKED, b.emb_mode) EMBARKED
+  6    FROM   titanic_train,
+  7  	      (SELECT avg(age) AVG_AGE
+  8  	       FROM   titanic_train) a,
+  9  	      (select stats_mode(EMBARKED) emb_mode
+ 10  	       from titanic_train) b;
+
+View created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> select tbl.PASSENGERID, tbl.EMBARKED, vw.EMBARKED
+  2  from   titanic_train_eda_vw vw,
+  3  	    titanic_train tbl
+  4  where  vw.PASSENGERID=tbl.PASSENGERID
+  5  and    tbl.PASSENGERID in
+  6  	    (select PASSENGERID from titanic_train
+  7  	     where EMBARKED is null);
+
+PASSENGERID EMB EMB
+----------- --- ---
+         62     S
+        830     S
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- Get a summary of the survival number by passenger class (statistically significant???)
+DMUSER@orcl 14-FEB-2021 22:52> select *
+  2  from
+  3    (select survived, pclass, 1 ct
+  4  	from titanic_train_eda_vw)
+  5  pivot (sum(ct)
+  6    for survived in (0, 1))
+  7  order by pclass;
+
+    PCLASS          0          1
+---------- ---------- ----------
+         1         80        136
+         2         97         87
+         3        372        119
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- Create a bar chart of survival by sex
+DMUSER@orcl 14-FEB-2021 22:52> select *
+  2  from
+  3    (select survived, sex, 1 ct
+  4  	from titanic_train_eda_vw)
+  5  pivot (sum(ct)
+  6    for survived in (0, 1))
+  7  order by sex;
+
+SEX               0          1
+-------- ---------- ----------
+female           81        233
+male            468        109
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- Out of curriosity I want to combine these two columns to see the combined correlation
+DMUSER@orcl 14-FEB-2021 22:52> select *
+  2  from
+  3    (select survived, to_char(pclass)||','||sex "CLS_SEX", 1 ct
+  4  	from titanic_train_eda_vw)
+  5  pivot (sum(ct)
+  6    for survived in (0, 1))
+  7  order by "CLS_SEX";
+
+CLS_SEX                                                    0          1
+------------------------------------------------- ---------- ----------
+1,female                                                   3         91
+1,male                                                    77         45
+2,female                                                   6         70
+2,male                                                    91         17
+3,female                                                  72         72
+3,male                                                   300         47
+
+6 rows selected.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- Check survival rates by sibling/spouse numbers
+DMUSER@orcl 14-FEB-2021 22:52> select *
+  2  from
+  3    (select survived, sibsp, 1 ct
+  4  	from titanic_train_eda_vw)
+  5  pivot (sum(ct)
+  6    for survived in (0, 1))
+  7  order by sibsp;
+
+     SIBSP          0          1
+---------- ---------- ----------
+         0        398        210
+         1         97        112
+         2         15         13
+         3         12          4
+         4         15          3
+         5          5
+         8          7
+
+7 rows selected.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- Check survival rates by parent/child numbers
+DMUSER@orcl 14-FEB-2021 22:52> select *
+  2  from
+  3    (select survived, parch, 1 ct
+  4  	from titanic_train_eda_vw)
+  5  pivot (sum(ct)
+  6    for survived in (0, 1))
+  7  order by parch;
+
+     PARCH          0          1
+---------- ---------- ----------
+         0        445        233
+         1         53         65
+         2         40         40
+         3          2          3
+         4          4
+         5          4          1
+         6          1
+
+7 rows selected.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- Check the survival rates by the port of embarkment
+DMUSER@orcl 14-FEB-2021 22:52> select *
+  2  from
+  3    (select survived, embarked, 1 ct
+  4  	from titanic_train_eda_vw)
+  5  pivot (sum(ct)
+  6    for survived in (0, 1))
+  7  order by embarked;
+
+EMB          0          1
+--- ---------- ----------
+C          75         93
+Q          47         30
+S         427        219
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- Bin the age
+DMUSER@orcl 14-FEB-2021 22:52> -- Check the survival by age
+DMUSER@orcl 14-FEB-2021 22:52> CREATE OR REPLACE VIEW titanic_train_eda_vw AS
+  2    SELECT PASSENGERID, SURVIVED, PCLASS, NAME, SEX,
+  3  	      case
+  4  		when NVL(AGE, a.AVG_AGE) < 10 then '0-9'
+  5  		when NVL(AGE, a.AVG_AGE) < 20 then '10-19'
+  6  		when NVL(AGE, a.AVG_AGE) < 30 then '20-29'
+  7  		when NVL(AGE, a.AVG_AGE) < 40 then '30-39'
+  8  		when NVL(AGE, a.AVG_AGE) < 50 then '40-49'
+  9  		when NVL(AGE, a.AVG_AGE) < 60 then '50-59'
+ 10  		when NVL(AGE, a.AVG_AGE) < 70 then '60-69'
+ 11  		else '70plus'
+ 12  	      end age_bin,
+ 13  	      SIBSP, PARCH, TICKET, FARE,
+ 14  	      NVL(EMBARKED, b.emb_mode) EMBARKED
+ 15    FROM   titanic_train,
+ 16  	      (SELECT avg(age) AVG_AGE
+ 17  	       FROM   titanic_train) a,
+ 18  	      (select stats_mode(EMBARKED) emb_mode
+ 19  	       from titanic_train) b;
+
+View created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> select *
+  2  from
+  3    (select survived, age_bin, 1 ct
+  4  	from titanic_train_eda_vw)
+  5  pivot (sum(ct)
+  6    for survived in (0, 1))
+  7  order by age_bin;
+
+AGE_BI          0          1
+------ ---------- ----------
+0-9            24         38
+10-19          61         41
+20-29         268        129
+30-39          94         73
+40-49          55         34
+50-59          28         20
+60-69          13          6
+70plus          6          1
+
+8 rows selected.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- Drop columns that are not useful
+DMUSER@orcl 14-FEB-2021 22:52> CREATE OR REPLACE VIEW titanic_train_eda_vw AS
+  2    SELECT PASSENGERID, SURVIVED, PCLASS, SEX,
+  3  	      case
+  4  		when NVL(AGE, a.AVG_AGE) < 10 then '0-9'
+  5  		when NVL(AGE, a.AVG_AGE) < 20 then '10-19'
+  6  		when NVL(AGE, a.AVG_AGE) < 30 then '20-29'
+  7  		when NVL(AGE, a.AVG_AGE) < 40 then '30-39'
+  8  		when NVL(AGE, a.AVG_AGE) < 50 then '40-49'
+  9  		when NVL(AGE, a.AVG_AGE) < 60 then '50-59'
+ 10  		when NVL(AGE, a.AVG_AGE) < 70 then '60-69'
+ 11  		else '70plus'
+ 12  	      end age_bin,
+ 13  	      SIBSP, PARCH, FARE,
+ 14  	      NVL(EMBARKED, b.emb_mode) EMBARKED
+ 15    FROM   titanic_train,
+ 16  	      (SELECT avg(age) AVG_AGE
+ 17  	       FROM   titanic_train) a,
+ 18  	      (select stats_mode(EMBARKED) emb_mode
+ 19  	       from titanic_train) b;
+
+View created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- Check again the statistical overview
+DMUSER@orcl 14-FEB-2021 22:52> exec dm_populate_stats_tbl_proc(-
+>   p_owner    => 'DMUSER',-
+>   p_data_tbl => 'titanic_train_eda_vw',-
+>   p_num_tbl  => 'titanic_train_num_stats',-
+>   p_char_tbl => 'titanic_train_char_stats');
+Truncated: titanic_train_num_stats
+Truncated: titanic_train_char_stats
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> col column_name format a15
+DMUSER@orcl 14-FEB-2021 22:52> col count format 999,990
+DMUSER@orcl 14-FEB-2021 22:52> select COLUMN_NAME,
+  2  	    "COUNT",
+  3  	    round(MEAN,3) MEAN,
+  4  	    round(STD,3) STD,
+  5  	    round("MIN",3) "MIN",
+  6  	    round("25%",3) "25%",
+  7  	    round("50%",3) "50%",
+  8  	    round("75%",3) "75%",
+  9  	    round("MAX",3) "MAX"
+ 10  from titanic_train_num_stats;
+
+COLUMN_NAME        COUNT       MEAN        STD        MIN        25%        50%        75%        MAX
+--------------- -------- ---------- ---------- ---------- ---------- ---------- ---------- ----------
+PASSENGERID          891        446    257.354          1      223.5        446      668.5        891
+SURVIVED             891       .384       .487          0          0          0          1          1
+PCLASS               891      2.309       .836          1          2          3          3          3
+SIBSP                891       .523      1.103          0          0          0          1          8
+PARCH                891       .382       .806          0          0          0          0          6
+FARE                 891     32.204     49.693          0       7.91     14.454         31    512.329
+
+6 rows selected.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> col column_name format a15
+DMUSER@orcl 14-FEB-2021 22:52> col top format a40
+DMUSER@orcl 14-FEB-2021 22:52> select * from titanic_train_char_stats;
+
+COLUMN_NAME        COUNT     UNIQUE TOP                                            FREQ
+--------------- -------- ---------- ---------------------------------------- ----------
+SEX                  891          2 male                                            577
+AGE_BIN              891          8 20-29                                           397
+EMBARKED             891          3 S                                              646
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> exec dm_create_null_tbl_proc('DMUSER','titanic_train_eda_vw');
+Dropped: titanic_train_eda_vw_null_ct
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> select * from titanic_train_eda_vw_null_ct;
+
+no rows selected
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- ################
+DMUSER@orcl 14-FEB-2021 22:52> -- # Apply Models #
+DMUSER@orcl 14-FEB-2021 22:52> -- ################
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- recreate view with only desired columns
+DMUSER@orcl 14-FEB-2021 22:52> CREATE OR REPLACE VIEW titanic_train_vw AS
+  2    SELECT PASSENGERID, SURVIVED, PCLASS, SEX,
+  3  	      AGE, SIBSP, PARCH, FARE, EMBARKED
+  4    FROM   titanic_train;
+
+View created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> /*-------------------- Train/Test Split --------------------*/
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> select count(*) from titanic_train_vw;
+
+  COUNT(*)
+----------
+       891
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> BEGIN
+  2    execute immediate 'drop view titanic_build_data_vw';
+  3  EXCEPTION
+  4    WHEN others THEN
+  5  	 null;
+  6  END;
+  7  /
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> create view titanic_build_data_vw as
+  2    select * from titanic_train_vw
+  3    where ora_hash(passengerid, 99, 0) <= 60;
+
+View created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> select count(*) from titanic_build_data_vw;
+
+  COUNT(*)
+----------
+       527
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- use opposite in where to create test set
+DMUSER@orcl 14-FEB-2021 22:52> BEGIN
+  2    execute immediate 'drop view titanic_test_data_vw';
+  3  EXCEPTION
+  4    WHEN others THEN
+  5  	 null;
+  6  END;
+  7  /
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> create view titanic_test_data_vw
+  2  as select * from titanic_train_vw
+  3  	where ora_hash(passengerid, 99, 0) > 60;
+
+View created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> select count(*) from titanic_test_data_vw;
+
+  COUNT(*)
+----------
+       364
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- Create table to capture accuracy of each model
+DMUSER@orcl 14-FEB-2021 22:52> BEGIN
+  2    execute immediate 'drop table titanic_model_accuracy';
+  3  EXCEPTION
+  4    WHEN others THEN
+  5  	 null;
+  6  END;
+  7  /
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> create table titanic_model_accuracy (
+  2    MODEL_NAME VARCHAR2(128),
+  3    ALGO_NAME  VARCHAR2(128),
+  4    ACCURACY   NUMBER);
+
+Table created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> /*-------------------- Decision Tree --------------------*/
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> DECLARE
+  2    v_model_set_tbl VARCHAR2(30) := 'titanic_dt_settings';
+  3    sql_stmt        VARCHAR2(200);
+  4  BEGIN
+  5    -- Drop settings table
+  6    BEGIN
+  7  	 sql_stmt := 'drop table '||v_model_set_tbl;
+  8  	 execute immediate sql_stmt;
+  9    EXCEPTION
+ 10  	 WHEN others THEN
+ 11  	   null;
+ 12    END;
+ 13  
+ 14    -- create settings table
+ 15    sql_stmt := 'CREATE TABLE '||v_model_set_tbl||'
+ 16  	   (setting_name   VARCHAR2(30),
+ 17  	    setting_value  VARCHAR2(4000)
+ 18  	 )';
+ 19    execute immediate sql_stmt;
+ 20  END;
+ 21  /
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> BEGIN
+  2    -- insert settings for a decision tree
+  3    INSERT INTO titanic_dt_settings
+  4  	 (setting_name, setting_value)
+  5    values
+  6  	 (dbms_data_mining.algo_name, dbms_data_mining.algo_decision_tree);
+  7  
+  8    INSERT INTO titanic_dt_settings
+  9  	 (setting_name, setting_value)
+ 10    values
+ 11  	 (dbms_data_mining.prep_auto, dbms_data_mining.prep_auto_on);
+ 12  
+ 13    INSERT INTO titanic_dt_settings
+ 14  	 (setting_name, setting_value)
+ 15    values
+ 16  	 ('TREE_IMPURITY_METRIC','TREE_IMPURITY_ENTROPY');
+ 17  
+ 18    INSERT INTO titanic_dt_settings
+ 19  	 (setting_name, setting_value)
+ 20    values
+ 21  	 ('TREE_TERM_MAX_DEPTH',4);
+ 22    commit;
+ 23  END;
+ 24  /
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> DECLARE
+  2    v_data_tbl      VARCHAR2(30) := 'titanic_build_data_vw';
+  3    v_miss_num_tbl  VARCHAR2(30) := 'TITANIC_XFORM_MISS_NUM';
+  4    v_miss_cat_tbl  VARCHAR2(30) := 'TITANIC_XFORM_MISS_CAT';
+  5    v_model_set_tbl VARCHAR2(30) := 'titanic_dt_settings';
+  6    v_model_name    VARCHAR2(30) := 'TITANIC_DT_MODEL';
+  7    v_case_id_col   VARCHAR2(30) := 'PASSENGERID';
+  8    v_target_col    VARCHAR2(30) := 'SURVIVED';
+  9    sql_stmt        VARCHAR2(200);
+ 10    transform_stack dbms_data_mining_transform.TRANSFORM_LIST;
+ 11  BEGIN
+ 12    -- Drop xform tables
+ 13    BEGIN
+ 14  	 sql_stmt := 'drop table '||v_miss_num_tbl;
+ 15  	 execute immediate sql_stmt;
+ 16    EXCEPTION
+ 17  	 WHEN others THEN
+ 18  	   null;
+ 19    END;
+ 20    BEGIN
+ 21  	 sql_stmt := 'drop table '||v_miss_cat_tbl;
+ 22  	 execute immediate sql_stmt;
+ 23    EXCEPTION
+ 24  	 WHEN others THEN
+ 25  	   null;
+ 26    END;
+ 27  
+ 28    -- Transform numeric attributes
+ 29    dbms_data_mining_transform.CREATE_MISS_NUM (
+ 30  	 miss_table_name => v_miss_num_tbl);
+ 31  
+ 32    dbms_data_mining_transform.INSERT_MISS_NUM_MEAN (
+ 33  	 miss_table_name => v_miss_num_tbl,
+ 34  	 data_table_name => v_data_tbl,
+ 35  	 exclude_list	 => dbms_data_mining_transform.column_list (
+ 36  			    v_target_col,
+ 37  			    v_case_id_col));
+ 38  
+ 39    -- Transform categorical attributes
+ 40    dbms_data_mining_transform.CREATE_MISS_CAT (
+ 41  	 miss_table_name => v_miss_cat_tbl);
+ 42  
+ 43    dbms_data_mining_transform.INSERT_MISS_CAT_MODE (
+ 44  	 miss_table_name => v_miss_cat_tbl,
+ 45  	 data_table_name => v_data_tbl,
+ 46  	 exclude_list	 => dbms_data_mining_transform.column_list (
+ 47  			    v_target_col,
+ 48  			    v_case_id_col));
+ 49  
+ 50    -- drop model
+ 51    BEGIN
+ 52  	 DBMS_DATA_MINING.DROP_MODEL(v_model_name);
+ 53    EXCEPTION
+ 54  	 WHEN others THEN
+ 55  	   null;
+ 56    END;
+ 57  
+ 58    -- stack missing numeric xforms
+ 59    dbms_data_mining_transform.STACK_MISS_NUM (
+ 60  	 miss_table_name     => v_miss_num_tbl,
+ 61  	 xform_list	     => transform_stack);
+ 62  
+ 63    -- stack missing categorical xforms
+ 64    dbms_data_mining_transform.STACK_MISS_CAT (
+ 65  	 miss_table_name     => v_miss_cat_tbl,
+ 66  	 xform_list	     => transform_stack);
+ 67  
+ 68    -- create the model
+ 69    DBMS_DATA_MINING.CREATE_MODEL(
+ 70  	 model_name	     => v_model_name,
+ 71  	 mining_function     => dbms_data_mining.classification,
+ 72  	 data_table_name     => v_data_tbl,
+ 73  	 case_id_column_name => v_case_id_col,
+ 74  	 target_column_name  => v_target_col,
+ 75  	 settings_table_name => v_model_set_tbl,
+ 76  	 xform_list	     => transform_stack);
+ 77  
+ 78  END;
+ 79  /
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- create view of predictions
+DMUSER@orcl 14-FEB-2021 22:52> CREATE OR REPLACE VIEW titanic_dt_test_results
+  2  AS SELECT PASSENGERID,
+  3  	    prediction(TITANIC_DT_MODEL USING *) predicted_value,
+  4  	    prediction_probability(TITANIC_DT_MODEL USING *) probability
+  5  FROM   titanic_test_data_vw;
+
+View created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- create confusion matrix
+DMUSER@orcl 14-FEB-2021 22:52> CREATE or REPLACE PROCEDURE dm_create_conf_mtrx_proc
+  2    (p_matrix_tbl	   IN VARCHAR2,
+  3  	p_apply_result_tbl IN VARCHAR2,
+  4  	p_target_tbl	   IN VARCHAR2,
+  5  	p_case_id	   IN VARCHAR2,
+  6  	p_target_col	   IN VARCHAR2,
+  7  	p_accuracy_tbl	   IN VARCHAR2,
+  8  	p_model_name	   IN VARCHAR2)
+  9  AUTHID CURRENT_USER is
+ 10    v_accuracy  NUMBER;
+ 11    sql_stmt    VARCHAR2(200);
+ 12    v_algo	   all_mining_models.ALGORITHM%TYPE;
+ 13  BEGIN
+ 14    BEGIN
+ 15  	 sql_stmt := 'drop table '|| p_matrix_tbl;
+ 16  	 EXECUTE IMMEDIATE sql_stmt;
+ 17  	 dbms_output.put_line('Dropped table: '|| p_matrix_tbl);
+ 18    EXCEPTION
+ 19  	 WHEN others THEN
+ 20  	   dbms_output.put_line('Table '|| p_matrix_tbl ||' does not exist.');
+ 21    END;
+ 22  
+ 23    DBMS_DATA_MINING.COMPUTE_CONFUSION_MATRIX (
+ 24  	   accuracy			=> v_accuracy,
+ 25  	   apply_result_table_name	=> p_apply_result_tbl,
+ 26  	   target_table_name		=> p_target_tbl,
+ 27  	   case_id_column_name		=> p_case_id,
+ 28  	   target_column_name		=> p_target_col,
+ 29  	   confusion_matrix_table_name	=> p_matrix_tbl,
+ 30  	   score_column_name		=> 'PREDICTED_VALUE',
+ 31  	   score_criterion_column_name	=> 'PROBABILITY',
+ 32  	   cost_matrix_table_name	=> NULL,
+ 33  	   apply_result_schema_name	=> NULL,
+ 34  	   target_schema_name		=> NULL,
+ 35  	   cost_matrix_schema_name	=> NULL,
+ 36  	   score_criterion_type 	=> 'PROBABILITY');
+ 37    DBMS_OUTPUT.PUT_LINE('**** MODEL ACCURACY ****: ' || ROUND(v_accuracy,4));
+ 38  
+ 39    select ALGORITHM into v_algo
+ 40    from all_mining_models
+ 41    where model_name=p_model_name;
+ 42  
+ 43    sql_stmt := 'insert into '||p_accuracy_tbl||' (MODEL_NAME, ALGO_NAME, ACCURACY)
+ 44  		    values ('''||p_model_name||''','''||v_algo||''','||v_accuracy||')';
+ 45    execute immediate sql_stmt;
+ 46    commit;
+ 47  END;
+ 48  /
+
+Procedure created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> exec dm_create_conf_mtrx_proc( -
+>   p_matrix_tbl       => 'TITANIC_DT_CONFUSION_MATRIX', -
+>   p_apply_result_tbl => 'titanic_dt_test_results', -
+>   p_target_tbl       => 'titanic_test_data_vw', -
+>   p_case_id	       => 'PASSENGERID', -
+>   p_target_col       => 'SURVIVED', -
+>   p_accuracy_tbl     => 'titanic_model_accuracy', -
+>   p_model_name       => 'TITANIC_DT_MODEL');
+Dropped table: TITANIC_DT_CONFUSION_MATRIX
+**** MODEL ACCURACY ****: .7775
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> col model_name format a40
+DMUSER@orcl 14-FEB-2021 22:52> col algo_name format a30
+DMUSER@orcl 14-FEB-2021 22:52> col accuracy format 0.9990
+DMUSER@orcl 14-FEB-2021 22:52> select * from titanic_model_accuracy;
+
+MODEL_NAME                               ALGO_NAME                      ACCURACY
+---------------------------------------- ------------------------------ --------
+TITANIC_DT_MODEL                         DECISION_TREE                    0.7775
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- show confusion matrix
+DMUSER@orcl 14-FEB-2021 22:52> break on report;
+DMUSER@orcl 14-FEB-2021 22:52> compute sum label 'TOTAL' of "PRED_0" "PRED_1" "TOTAL" on report;
+DMUSER@orcl 14-FEB-2021 22:52> col ACTUAL_TARGET_VALUE heading 'ACTUAL'
+DMUSER@orcl 14-FEB-2021 22:52> col PRED_0 heading 'PREDICTED|0'
+DMUSER@orcl 14-FEB-2021 22:52> col PRED_1 heading 'PREDICTED|1'
+DMUSER@orcl 14-FEB-2021 22:52> select *
+  2  FROM
+  3    (SELECT ACTUAL_TARGET_VALUE, PREDICTED_TARGET_VALUE, VALUE
+  4  	FROM   TITANIC_DT_CONFUSION_MATRIX
+  5  	UNION
+  6  	SELECT ACTUAL_TARGET_VALUE, -1 PREDICTED_TARGET_VALUE, sum(value) VALUE
+  7  	FROM   TITANIC_DT_CONFUSION_MATRIX
+  8  	GROUP BY ACTUAL_TARGET_VALUE, -1)
+  9  PIVOT (
+ 10    SUM(value)
+ 11    FOR predicted_target_value
+ 12    IN (0 "PRED_0",1 "PRED_1",-1 "TOTAL"))
+ 13  ORDER BY actual_target_value;
+
+            PREDICTED  PREDICTED
+    ACTUAL          0          1      TOTAL
+---------- ---------- ---------- ----------
+         0        191         34        225
+         1         47         92        139
+           ---------- ---------- ----------
+TOTAL             238        126        364
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> /*-------------------- Random Forest --------------------*/
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> DECLARE
+  2    v_model_set_tbl VARCHAR2(30) := 'titanic_rf_settings';
+  3    sql_stmt        VARCHAR2(200);
+  4  BEGIN
+  5    -- Drop settings table
+  6    BEGIN
+  7  	 sql_stmt := 'drop table '||v_model_set_tbl;
+  8  	 execute immediate sql_stmt;
+  9    EXCEPTION
+ 10  	 WHEN others THEN
+ 11  	   null;
+ 12    END;
+ 13  
+ 14    -- create settings table
+ 15    sql_stmt := 'CREATE TABLE '||v_model_set_tbl||'
+ 16  	   (setting_name   VARCHAR2(30),
+ 17  	    setting_value  VARCHAR2(4000)
+ 18  	 )';
+ 19    execute immediate sql_stmt;
+ 20  END;
+ 21  /
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> BEGIN
+  2    -- insert settings for a random forest
+  3    INSERT INTO titanic_rf_settings
+  4  	 (setting_name, setting_value)
+  5    values (dbms_data_mining.algo_name, dbms_data_mining.ALGO_RANDOM_FOREST);
+  6  
+  7    INSERT INTO titanic_rf_settings
+  8  	 (setting_name, setting_value)
+  9    values
+ 10  	 (dbms_data_mining.prep_auto, dbms_data_mining.prep_auto_on);
+ 11  
+ 12    INSERT INTO titanic_rf_settings
+ 13  	 (setting_name, setting_value)
+ 14    values
+ 15  	 ('RFOR_NUM_TREES', 100);
+ 16    commit;
+ 17  END;
+ 18  /
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> DECLARE
+  2    v_data_tbl      VARCHAR2(30) := 'titanic_build_data_vw';
+  3    v_miss_num_tbl  VARCHAR2(30) := 'TITANIC_XFORM_MISS_NUM';
+  4    v_miss_cat_tbl  VARCHAR2(30) := 'TITANIC_XFORM_MISS_CAT';
+  5    v_model_set_tbl VARCHAR2(30) := 'titanic_rf_settings';
+  6    v_model_name    VARCHAR2(30) := 'TITANIC_RF_MODEL';
+  7    v_case_id_col   VARCHAR2(30) := 'PASSENGERID';
+  8    v_target_col    VARCHAR2(30) := 'SURVIVED';
+  9    sql_stmt        VARCHAR2(200);
+ 10    transform_stack dbms_data_mining_transform.TRANSFORM_LIST;
+ 11  BEGIN
+ 12    -- drop model
+ 13    BEGIN
+ 14  	 DBMS_DATA_MINING.DROP_MODEL(v_model_name);
+ 15    EXCEPTION
+ 16  	 WHEN others THEN
+ 17  	   null;
+ 18    END;
+ 19  
+ 20    -- stack missing numeric xforms
+ 21    dbms_data_mining_transform.STACK_MISS_NUM (
+ 22  	 miss_table_name     => v_miss_num_tbl,
+ 23  	 xform_list	     => transform_stack);
+ 24  
+ 25    -- stack missing categorical xforms
+ 26    dbms_data_mining_transform.STACK_MISS_CAT (
+ 27  	 miss_table_name     => v_miss_cat_tbl,
+ 28  	 xform_list	     => transform_stack);
+ 29  
+ 30    -- create the model
+ 31    DBMS_DATA_MINING.CREATE_MODEL(
+ 32  	 model_name	     => v_model_name,
+ 33  	 mining_function     => dbms_data_mining.classification,
+ 34  	 data_table_name     => v_data_tbl,
+ 35  	 case_id_column_name => v_case_id_col,
+ 36  	 target_column_name  => v_target_col,
+ 37  	 settings_table_name => v_model_set_tbl,
+ 38  	 xform_list	     => transform_stack);
+ 39  END;
+ 40  /
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- create view of predictions
+DMUSER@orcl 14-FEB-2021 22:52> CREATE OR REPLACE VIEW titanic_rf_test_results
+  2  AS SELECT PASSENGERID,
+  3  	    prediction(TITANIC_RF_MODEL USING *) predicted_value,
+  4  	    prediction_probability(TITANIC_RF_MODEL USING *) probability
+  5  FROM   titanic_test_data_vw;
+
+View created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> exec dm_create_conf_mtrx_proc( -
+>   p_matrix_tbl       => 'TITANIC_RF_CONFUSION_MATRIX', -
+>   p_apply_result_tbl => 'titanic_rf_test_results', -
+>   p_target_tbl       => 'titanic_test_data_vw', -
+>   p_case_id	       => 'PASSENGERID', -
+>   p_target_col       => 'SURVIVED', -
+>   p_accuracy_tbl     => 'titanic_model_accuracy', -
+>   p_model_name       => 'TITANIC_RF_MODEL');
+Dropped table: TITANIC_RF_CONFUSION_MATRIX
+**** MODEL ACCURACY ****: .7912
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> col model_name format a40
+DMUSER@orcl 14-FEB-2021 22:52> col algo_name format a30
+DMUSER@orcl 14-FEB-2021 22:52> col accuracy format 0.9990
+DMUSER@orcl 14-FEB-2021 22:52> select * from titanic_model_accuracy;
+
+MODEL_NAME                               ALGO_NAME                      ACCURACY
+---------------------------------------- ------------------------------ --------
+TITANIC_DT_MODEL                         DECISION_TREE                    0.7775
+TITANIC_RF_MODEL                         RANDOM_FOREST                    0.7912
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- show confusion matrix
+DMUSER@orcl 14-FEB-2021 22:52> break on report;
+DMUSER@orcl 14-FEB-2021 22:52> compute sum label 'TOTAL' of "PRED_0" "PRED_1" "TOTAL" on report;
+DMUSER@orcl 14-FEB-2021 22:52> col ACTUAL_TARGET_VALUE heading 'ACTUAL'
+DMUSER@orcl 14-FEB-2021 22:52> col PRED_0 heading 'PREDICTED|0'
+DMUSER@orcl 14-FEB-2021 22:52> col PRED_1 heading 'PREDICTED|1'
+DMUSER@orcl 14-FEB-2021 22:52> select *
+  2  FROM
+  3    (SELECT ACTUAL_TARGET_VALUE, PREDICTED_TARGET_VALUE, VALUE
+  4  	FROM   TITANIC_RF_CONFUSION_MATRIX
+  5  	UNION
+  6  	SELECT ACTUAL_TARGET_VALUE, -1 PREDICTED_TARGET_VALUE, sum(value) VALUE
+  7  	FROM   TITANIC_RF_CONFUSION_MATRIX
+  8  	GROUP BY ACTUAL_TARGET_VALUE, -1)
+  9  PIVOT (
+ 10    SUM(value)
+ 11    FOR predicted_target_value
+ 12    IN (0 "PRED_0",1 "PRED_1",-1 "TOTAL"))
+ 13  ORDER BY actual_target_value;
+
+            PREDICTED  PREDICTED
+    ACTUAL          0          1      TOTAL
+---------- ---------- ---------- ----------
+         0        200         25        225
+         1         51         88        139
+           ---------- ---------- ----------
+TOTAL             251        113        364
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> /*-------------------- Logistic Regression --------------------*/
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> DECLARE
+  2    v_model_set_tbl VARCHAR2(30) := 'titanic_glr_settings';
+  3    sql_stmt        VARCHAR2(200);
+  4  BEGIN
+  5    -- Drop settings table
+  6    BEGIN
+  7  	 sql_stmt := 'drop table '||v_model_set_tbl;
+  8  	 execute immediate sql_stmt;
+  9    EXCEPTION
+ 10  	 WHEN others THEN
+ 11  	   null;
+ 12    END;
+ 13  
+ 14    -- create settings table
+ 15    sql_stmt := 'CREATE TABLE '||v_model_set_tbl||'
+ 16  	   (setting_name   VARCHAR2(30),
+ 17  	    setting_value  VARCHAR2(4000)
+ 18  	 )';
+ 19    execute immediate sql_stmt;
+ 20  END;
+ 21  /
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> BEGIN
+  2    -- insert settings for a random forest
+  3    INSERT INTO titanic_glr_settings
+  4  	 (setting_name, setting_value)
+  5    values
+  6  	 (dbms_data_mining.algo_name, dbms_data_mining.ALGO_GENERALIZED_LINEAR_MODEL);
+  7  
+  8    INSERT INTO titanic_glr_settings
+  9  	 (setting_name, setting_value)
+ 10    values
+ 11  	 (dbms_data_mining.prep_auto, dbms_data_mining.prep_auto_on);
+ 12    commit;
+ 13  END;
+ 14  /
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> DECLARE
+  2    v_data_tbl      VARCHAR2(30) := 'titanic_build_data_vw';
+  3    v_miss_num_tbl  VARCHAR2(30) := 'TITANIC_XFORM_MISS_NUM';
+  4    v_miss_cat_tbl  VARCHAR2(30) := 'TITANIC_XFORM_MISS_CAT';
+  5    v_model_set_tbl VARCHAR2(30) := 'titanic_glr_settings';
+  6    v_model_name    VARCHAR2(30) := 'TITANIC_GLR_MODEL';
+  7    v_case_id_col   VARCHAR2(30) := 'PASSENGERID';
+  8    v_target_col    VARCHAR2(30) := 'SURVIVED';
+  9    sql_stmt        VARCHAR2(200);
+ 10    transform_stack dbms_data_mining_transform.TRANSFORM_LIST;
+ 11  BEGIN
+ 12    -- drop model
+ 13    BEGIN
+ 14  	 DBMS_DATA_MINING.DROP_MODEL(v_model_name);
+ 15    EXCEPTION
+ 16  	 WHEN others THEN
+ 17  	   null;
+ 18    END;
+ 19  
+ 20    -- stack missing numeric xforms
+ 21    dbms_data_mining_transform.STACK_MISS_NUM (
+ 22  	 miss_table_name     => v_miss_num_tbl,
+ 23  	 xform_list	     => transform_stack);
+ 24  
+ 25    -- stack missing categorical xforms
+ 26    dbms_data_mining_transform.STACK_MISS_CAT (
+ 27  	 miss_table_name     => v_miss_cat_tbl,
+ 28  	 xform_list	     => transform_stack);
+ 29  
+ 30    -- create the model
+ 31    DBMS_DATA_MINING.CREATE_MODEL(
+ 32  	 model_name	     => v_model_name,
+ 33  	 mining_function     => dbms_data_mining.classification,
+ 34  	 data_table_name     => v_data_tbl,
+ 35  	 case_id_column_name => v_case_id_col,
+ 36  	 target_column_name  => v_target_col,
+ 37  	 settings_table_name => v_model_set_tbl,
+ 38  	 xform_list	     => transform_stack);
+ 39  END;
+ 40  /
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- create view of predictions
+DMUSER@orcl 14-FEB-2021 22:52> CREATE OR REPLACE VIEW titanic_glr_test_results AS
+  2    SELECT PASSENGERID,
+  3  	      prediction(TITANIC_GLR_MODEL USING *) predicted_value,
+  4  	      prediction_probability(TITANIC_GLR_MODEL USING *) probability
+  5    FROM   titanic_test_data_vw;
+
+View created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> exec dm_create_conf_mtrx_proc( -
+>   p_matrix_tbl       => 'TITANIC_GLR_CONFUSION_MATRIX', -
+>   p_apply_result_tbl => 'titanic_glr_test_results', -
+>   p_target_tbl       => 'titanic_test_data_vw', -
+>   p_case_id	       => 'PASSENGERID', -
+>   p_target_col       => 'SURVIVED', -
+>   p_accuracy_tbl     => 'titanic_model_accuracy', -
+>   p_model_name       => 'TITANIC_GLR_MODEL');
+Dropped table: TITANIC_GLR_CONFUSION_MATRIX
+**** MODEL ACCURACY ****: .7912
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> col model_name format a40
+DMUSER@orcl 14-FEB-2021 22:52> col algo_name format a30
+DMUSER@orcl 14-FEB-2021 22:52> col accuracy format 0.9990
+DMUSER@orcl 14-FEB-2021 22:52> select * from titanic_model_accuracy;
+
+MODEL_NAME                               ALGO_NAME                      ACCURACY
+---------------------------------------- ------------------------------ --------
+TITANIC_DT_MODEL                         DECISION_TREE                    0.7775
+TITANIC_RF_MODEL                         RANDOM_FOREST                    0.7912
+TITANIC_GLR_MODEL                        GENERALIZED_LINEAR_MODEL         0.7912
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- show confusion matrix
+DMUSER@orcl 14-FEB-2021 22:52> break on report;
+DMUSER@orcl 14-FEB-2021 22:52> compute sum label 'TOTAL' of "PRED_0" "PRED_1" "TOTAL" on report;
+DMUSER@orcl 14-FEB-2021 22:52> col ACTUAL_TARGET_VALUE heading 'ACTUAL'
+DMUSER@orcl 14-FEB-2021 22:52> col PRED_0 heading 'PREDICTED|0'
+DMUSER@orcl 14-FEB-2021 22:52> col PRED_1 heading 'PREDICTED|1'
+DMUSER@orcl 14-FEB-2021 22:52> select *
+  2  FROM
+  3    (SELECT ACTUAL_TARGET_VALUE, PREDICTED_TARGET_VALUE, VALUE
+  4  	FROM   TITANIC_GLR_CONFUSION_MATRIX
+  5  	UNION
+  6  	SELECT ACTUAL_TARGET_VALUE, -1 PREDICTED_TARGET_VALUE, sum(value) VALUE
+  7  	FROM   TITANIC_GLR_CONFUSION_MATRIX
+  8  	GROUP BY ACTUAL_TARGET_VALUE, -1)
+  9  PIVOT (
+ 10    SUM(value)
+ 11    FOR predicted_target_value
+ 12    IN (0 "PRED_0",1 "PRED_1",-1 "TOTAL"))
+ 13  ORDER BY actual_target_value;
+
+            PREDICTED  PREDICTED
+    ACTUAL          0          1      TOTAL
+---------- ---------- ---------- ----------
+         0        198         27        225
+         1         49         90        139
+           ---------- ---------- ----------
+TOTAL             247        117        364
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> /*-------------------- Naive Bayes --------------------*/
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> DECLARE
+  2    v_model_set_tbl VARCHAR2(30) := 'titanic_nb_settings';
+  3    sql_stmt        VARCHAR2(200);
+  4  BEGIN
+  5    -- Drop settings table
+  6    BEGIN
+  7  	 sql_stmt := 'drop table '||v_model_set_tbl;
+  8  	 execute immediate sql_stmt;
+  9    EXCEPTION
+ 10  	 WHEN others THEN
+ 11  	   null;
+ 12    END;
+ 13  
+ 14    -- create settings table
+ 15    sql_stmt := 'CREATE TABLE '||v_model_set_tbl||'
+ 16  	   (setting_name   VARCHAR2(30),
+ 17  	    setting_value  VARCHAR2(4000)
+ 18  	 )';
+ 19    execute immediate sql_stmt;
+ 20  END;
+ 21  /
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> BEGIN
+  2    INSERT INTO titanic_nb_settings
+  3  	 (setting_name, setting_value)
+  4    values
+  5  	 (dbms_data_mining.algo_name, dbms_data_mining.ALGO_NAIVE_BAYES);
+  6  
+  7    INSERT INTO titanic_nb_settings
+  8  	 (setting_name, setting_value)
+  9    values
+ 10  	 (dbms_data_mining.prep_auto, dbms_data_mining.prep_auto_on);
+ 11    commit;
+ 12  END;
+ 13  /
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> DECLARE
+  2    v_data_tbl      VARCHAR2(30) := 'titanic_build_data_vw';
+  3    v_miss_num_tbl  VARCHAR2(30) := 'TITANIC_XFORM_MISS_NUM';
+  4    v_miss_cat_tbl  VARCHAR2(30) := 'TITANIC_XFORM_MISS_CAT';
+  5    v_model_set_tbl VARCHAR2(30) := 'titanic_nb_settings';
+  6    v_model_name    VARCHAR2(30) := 'TITANIC_NB_MODEL';
+  7    v_case_id_col   VARCHAR2(30) := 'PASSENGERID';
+  8    v_target_col    VARCHAR2(30) := 'SURVIVED';
+  9    sql_stmt        VARCHAR2(200);
+ 10    transform_stack dbms_data_mining_transform.TRANSFORM_LIST;
+ 11  BEGIN
+ 12    -- drop model
+ 13    BEGIN
+ 14  	 DBMS_DATA_MINING.DROP_MODEL(v_model_name);
+ 15    EXCEPTION
+ 16  	 WHEN others THEN
+ 17  	   null;
+ 18    END;
+ 19  
+ 20    -- stack missing numeric xforms
+ 21    dbms_data_mining_transform.STACK_MISS_NUM (
+ 22  	 miss_table_name     => v_miss_num_tbl,
+ 23  	 xform_list	     => transform_stack);
+ 24  
+ 25    -- stack missing categorical xforms
+ 26    dbms_data_mining_transform.STACK_MISS_CAT (
+ 27  	 miss_table_name     => v_miss_cat_tbl,
+ 28  	 xform_list	     => transform_stack);
+ 29  
+ 30    -- create the model
+ 31    DBMS_DATA_MINING.CREATE_MODEL(
+ 32  	 model_name	     => v_model_name,
+ 33  	 mining_function     => dbms_data_mining.classification,
+ 34  	 data_table_name     => v_data_tbl,
+ 35  	 case_id_column_name => v_case_id_col,
+ 36  	 target_column_name  => v_target_col,
+ 37  	 settings_table_name => v_model_set_tbl,
+ 38  	 xform_list	     => transform_stack);
+ 39  END;
+ 40  /
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- create view of predictions
+DMUSER@orcl 14-FEB-2021 22:52> CREATE OR REPLACE VIEW titanic_nb_test_results AS
+  2    SELECT PASSENGERID,
+  3  	      prediction(TITANIC_NB_MODEL USING *) predicted_value,
+  4  	      prediction_probability(TITANIC_NB_MODEL USING *) probability
+  5    FROM   titanic_test_data_vw;
+
+View created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> exec dm_create_conf_mtrx_proc( -
+>   p_matrix_tbl       => 'TITANIC_NB_CONFUSION_MATRIX', -
+>   p_apply_result_tbl => 'titanic_nb_test_results', -
+>   p_target_tbl       => 'titanic_test_data_vw', -
+>   p_case_id	       => 'PASSENGERID', -
+>   p_target_col       => 'SURVIVED', -
+>   p_accuracy_tbl     => 'titanic_model_accuracy', -
+>   p_model_name       => 'TITANIC_NB_MODEL');
+Dropped table: TITANIC_NB_CONFUSION_MATRIX
+**** MODEL ACCURACY ****: .7527
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> col model_name format a40
+DMUSER@orcl 14-FEB-2021 22:52> col algo_name format a30
+DMUSER@orcl 14-FEB-2021 22:52> col accuracy format 0.9990
+DMUSER@orcl 14-FEB-2021 22:52> select * from titanic_model_accuracy;
+
+MODEL_NAME                               ALGO_NAME                      ACCURACY
+---------------------------------------- ------------------------------ --------
+TITANIC_DT_MODEL                         DECISION_TREE                    0.7775
+TITANIC_RF_MODEL                         RANDOM_FOREST                    0.7912
+TITANIC_GLR_MODEL                        GENERALIZED_LINEAR_MODEL         0.7912
+TITANIC_NB_MODEL                         NAIVE_BAYES                      0.7527
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- show confusion matrix
+DMUSER@orcl 14-FEB-2021 22:52> break on report;
+DMUSER@orcl 14-FEB-2021 22:52> compute sum label 'TOTAL' of "PRED_0" "PRED_1" "TOTAL" on report;
+DMUSER@orcl 14-FEB-2021 22:52> col ACTUAL_TARGET_VALUE heading 'ACTUAL'
+DMUSER@orcl 14-FEB-2021 22:52> col PRED_0 heading 'PREDICTED|0'
+DMUSER@orcl 14-FEB-2021 22:52> col PRED_1 heading 'PREDICTED|1'
+DMUSER@orcl 14-FEB-2021 22:52> select *
+  2  FROM
+  3    (SELECT ACTUAL_TARGET_VALUE, PREDICTED_TARGET_VALUE, VALUE
+  4  	FROM   TITANIC_NB_CONFUSION_MATRIX
+  5  	UNION
+  6  	SELECT ACTUAL_TARGET_VALUE, -1 PREDICTED_TARGET_VALUE, sum(value) VALUE
+  7  	FROM   TITANIC_NB_CONFUSION_MATRIX
+  8  	GROUP BY ACTUAL_TARGET_VALUE, -1)
+  9  PIVOT (
+ 10    SUM(value)
+ 11    FOR predicted_target_value
+ 12    IN (0 "PRED_0",1 "PRED_1",-1 "TOTAL"))
+ 13  ORDER BY actual_target_value;
+
+            PREDICTED  PREDICTED
+    ACTUAL          0          1      TOTAL
+---------- ---------- ---------- ----------
+         0        173         52        225
+         1         38        101        139
+           ---------- ---------- ----------
+TOTAL             211        153        364
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> /*-------------------- Support Vector Machines --------------------*/
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> DECLARE
+  2    v_model_set_tbl VARCHAR2(30) := 'titanic_svm_settings';
+  3    sql_stmt  VARCHAR2(200);
+  4  BEGIN
+  5    -- Drop settings table
+  6    BEGIN
+  7  	 sql_stmt := 'drop table '||v_model_set_tbl;
+  8  	 execute immediate sql_stmt;
+  9    EXCEPTION
+ 10  	 WHEN others THEN
+ 11  	   null;
+ 12    END;
+ 13  
+ 14    -- create settings table
+ 15    sql_stmt := 'CREATE TABLE '||v_model_set_tbl||'
+ 16  	   (setting_name   VARCHAR2(30),
+ 17  	    setting_value  VARCHAR2(4000)
+ 18  	 )';
+ 19    execute immediate sql_stmt;
+ 20  END;
+ 21  /
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> BEGIN
+  2    INSERT INTO titanic_svm_settings
+  3  	 (setting_name, setting_value)
+  4    values
+  5  	 (dbms_data_mining.algo_name, dbms_data_mining.ALGO_SUPPORT_VECTOR_MACHINES);
+  6  
+  7    INSERT INTO titanic_svm_settings
+  8  	 (setting_name, setting_value)
+  9    values
+ 10  	 (dbms_data_mining.prep_auto, dbms_data_mining.prep_auto_on);
+ 11    commit;
+ 12  END;
+ 13  /
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> DECLARE
+  2    v_data_tbl      VARCHAR2(30) := 'titanic_build_data_vw';
+  3    v_miss_num_tbl  VARCHAR2(30) := 'TITANIC_XFORM_MISS_NUM';
+  4    v_miss_cat_tbl  VARCHAR2(30) := 'TITANIC_XFORM_MISS_CAT';
+  5    v_model_set_tbl VARCHAR2(30) := 'titanic_svm_settings';
+  6    v_model_name    VARCHAR2(30) := 'TITANIC_SVM_MODEL';
+  7    v_case_id_col   VARCHAR2(30) := 'PASSENGERID';
+  8    v_target_col    VARCHAR2(30) := 'SURVIVED';
+  9    sql_stmt        VARCHAR2(200);
+ 10    transform_stack dbms_data_mining_transform.TRANSFORM_LIST;
+ 11  BEGIN
+ 12    -- drop model
+ 13    BEGIN
+ 14  	 DBMS_DATA_MINING.DROP_MODEL(v_model_name);
+ 15    EXCEPTION
+ 16  	 WHEN others THEN
+ 17  	   null;
+ 18    END;
+ 19  
+ 20    -- stack missing numeric xforms
+ 21    dbms_data_mining_transform.STACK_MISS_NUM (
+ 22  	 miss_table_name     => v_miss_num_tbl,
+ 23  	 xform_list	     => transform_stack);
+ 24  
+ 25    -- stack missing categorical xforms
+ 26    dbms_data_mining_transform.STACK_MISS_CAT (
+ 27  	 miss_table_name     => v_miss_cat_tbl,
+ 28  	 xform_list	     => transform_stack);
+ 29  
+ 30    -- create the model
+ 31    DBMS_DATA_MINING.CREATE_MODEL(
+ 32  	 model_name	     => v_model_name,
+ 33  	 mining_function     => dbms_data_mining.classification,
+ 34  	 data_table_name     => v_data_tbl,
+ 35  	 case_id_column_name => v_case_id_col,
+ 36  	 target_column_name  => v_target_col,
+ 37  	 settings_table_name => v_model_set_tbl,
+ 38  	 xform_list	     => transform_stack);
+ 39  END;
+ 40  /
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- create view of predictions
+DMUSER@orcl 14-FEB-2021 22:52> CREATE OR REPLACE VIEW titanic_svm_test_results
+  2  AS SELECT PASSENGERID,
+  3  	    prediction(TITANIC_SVM_MODEL USING *) predicted_value,
+  4  	    prediction_probability(TITANIC_SVM_MODEL USING *) probability
+  5  FROM   titanic_test_data_vw;
+
+View created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> exec dm_create_conf_mtrx_proc( -
+>   p_matrix_tbl       => 'TITANIC_SVM_CONFUSION_MATRIX', -
+>   p_apply_result_tbl => 'titanic_svm_test_results', -
+>   p_target_tbl       => 'titanic_test_data_vw', -
+>   p_case_id	       => 'PASSENGERID', -
+>   p_target_col       => 'SURVIVED', -
+>   p_accuracy_tbl     => 'titanic_model_accuracy', -
+>   p_model_name       => 'TITANIC_SVM_MODEL');
+Dropped table: TITANIC_SVM_CONFUSION_MATRIX
+**** MODEL ACCURACY ****: .7775
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> col model_name format a40
+DMUSER@orcl 14-FEB-2021 22:52> col algo_name format a30
+DMUSER@orcl 14-FEB-2021 22:52> col accuracy format 0.9990
+DMUSER@orcl 14-FEB-2021 22:52> select * from titanic_model_accuracy;
+
+MODEL_NAME                               ALGO_NAME                      ACCURACY
+---------------------------------------- ------------------------------ --------
+TITANIC_DT_MODEL                         DECISION_TREE                    0.7775
+TITANIC_RF_MODEL                         RANDOM_FOREST                    0.7912
+TITANIC_GLR_MODEL                        GENERALIZED_LINEAR_MODEL         0.7912
+TITANIC_NB_MODEL                         NAIVE_BAYES                      0.7527
+TITANIC_SVM_MODEL                        SUPPORT_VECTOR_MACHINES          0.7775
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- show confusion matrix
+DMUSER@orcl 14-FEB-2021 22:52> break on report;
+DMUSER@orcl 14-FEB-2021 22:52> compute sum label 'TOTAL' of "PRED_0" "PRED_1" "TOTAL" on report;
+DMUSER@orcl 14-FEB-2021 22:52> col ACTUAL_TARGET_VALUE heading 'ACTUAL'
+DMUSER@orcl 14-FEB-2021 22:52> col PRED_0 heading 'PREDICTED|0'
+DMUSER@orcl 14-FEB-2021 22:52> col PRED_1 heading 'PREDICTED|1'
+DMUSER@orcl 14-FEB-2021 22:52> select *
+  2  FROM
+  3    (SELECT ACTUAL_TARGET_VALUE, PREDICTED_TARGET_VALUE, VALUE
+  4  	FROM   TITANIC_SVM_CONFUSION_MATRIX
+  5  	UNION
+  6  	SELECT ACTUAL_TARGET_VALUE, -1 PREDICTED_TARGET_VALUE, sum(value) VALUE
+  7  	FROM   TITANIC_SVM_CONFUSION_MATRIX
+  8  	GROUP BY ACTUAL_TARGET_VALUE, -1)
+  9  PIVOT (
+ 10    SUM(value)
+ 11    FOR predicted_target_value
+ 12    IN (0 "PRED_0",1 "PRED_1",-1 "TOTAL"))
+ 13  ORDER BY actual_target_value;
+
+            PREDICTED  PREDICTED
+    ACTUAL          0          1      TOTAL
+---------- ---------- ---------- ----------
+         0        191         34        225
+         1         47         92        139
+           ---------- ---------- ----------
+TOTAL             238        126        364
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- ################################
+DMUSER@orcl 14-FEB-2021 22:52> -- # Re-train Most Accurate Model #
+DMUSER@orcl 14-FEB-2021 22:52> -- ################################
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- put accuracy measures into table/view for easy comparison
+DMUSER@orcl 14-FEB-2021 22:52> col model_name format a40
+DMUSER@orcl 14-FEB-2021 22:52> col algo_name format a30
+DMUSER@orcl 14-FEB-2021 22:52> col accuracy format 0.9990
+DMUSER@orcl 14-FEB-2021 22:52> select * from titanic_model_accuracy;
+
+MODEL_NAME                               ALGO_NAME                      ACCURACY
+---------------------------------------- ------------------------------ --------
+TITANIC_DT_MODEL                         DECISION_TREE                    0.7775
+TITANIC_RF_MODEL                         RANDOM_FOREST                    0.7912
+TITANIC_GLR_MODEL                        GENERALIZED_LINEAR_MODEL         0.7912
+TITANIC_NB_MODEL                         NAIVE_BAYES                      0.7527
+TITANIC_SVM_MODEL                        SUPPORT_VECTOR_MACHINES          0.7775
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- retrain model with full training data set
+DMUSER@orcl 14-FEB-2021 22:52> DECLARE
+  2    v_data_tbl      VARCHAR2(30) := 'titanic_train_vw';
+  3    v_miss_num_tbl  VARCHAR2(30) := 'TITANIC_XFORM_MISS_NUM_FULL';
+  4    v_miss_cat_tbl  VARCHAR2(30) := 'TITANIC_XFORM_MISS_CAT_FULL';
+  5    v_model_set_tbl VARCHAR2(30) := 'titanic_rf_settings';
+  6    v_model_name    VARCHAR2(30) := 'TITANIC_RF_MODEL_FULL';
+  7    v_case_id_col   VARCHAR2(30) := 'PASSENGERID';
+  8    v_target_col    VARCHAR2(30) := 'SURVIVED';
+  9    sql_stmt        VARCHAR2(200);
+ 10    transform_stack dbms_data_mining_transform.TRANSFORM_LIST;
+ 11  BEGIN
+ 12    -- Drop xform tables
+ 13    BEGIN
+ 14  	 sql_stmt := 'drop table '||v_miss_num_tbl;
+ 15  	 execute immediate sql_stmt;
+ 16    EXCEPTION
+ 17  	 WHEN others THEN
+ 18  	   null;
+ 19    END;
+ 20    BEGIN
+ 21  	 sql_stmt := 'drop table '||v_miss_cat_tbl;
+ 22  	 execute immediate sql_stmt;
+ 23    EXCEPTION
+ 24  	 WHEN others THEN
+ 25  	   null;
+ 26    END;
+ 27  
+ 28    -- Transform numeric attributes
+ 29    dbms_data_mining_transform.CREATE_MISS_NUM (
+ 30  	 miss_table_name => v_miss_num_tbl);
+ 31  
+ 32    dbms_data_mining_transform.INSERT_MISS_NUM_MEAN (
+ 33  	 miss_table_name => v_miss_num_tbl,
+ 34  	 data_table_name => v_data_tbl,
+ 35  	 exclude_list	 => dbms_data_mining_transform.column_list (
+ 36  			    v_target_col,
+ 37  			    v_case_id_col));
+ 38  
+ 39    -- Transform categorical attributes
+ 40    dbms_data_mining_transform.CREATE_MISS_CAT (
+ 41  	 miss_table_name => v_miss_cat_tbl);
+ 42  
+ 43    dbms_data_mining_transform.INSERT_MISS_CAT_MODE (
+ 44  	 miss_table_name => v_miss_cat_tbl,
+ 45  	 data_table_name => v_data_tbl,
+ 46  	 exclude_list	 => dbms_data_mining_transform.column_list (
+ 47  			    v_target_col,
+ 48  			    v_case_id_col));
+ 49  
+ 50    -- drop model
+ 51    BEGIN
+ 52  	 DBMS_DATA_MINING.DROP_MODEL(v_model_name);
+ 53    EXCEPTION
+ 54  	 WHEN others THEN
+ 55  	   null;
+ 56    END;
+ 57  
+ 58    -- stack missing numeric xforms
+ 59    dbms_data_mining_transform.STACK_MISS_NUM (
+ 60  	 miss_table_name     => v_miss_num_tbl,
+ 61  	 xform_list	     => transform_stack);
+ 62  
+ 63    -- stack missing categorical xforms
+ 64    dbms_data_mining_transform.STACK_MISS_CAT (
+ 65  	 miss_table_name     => v_miss_cat_tbl,
+ 66  	 xform_list	     => transform_stack);
+ 67  
+ 68    -- create the model
+ 69    DBMS_DATA_MINING.CREATE_MODEL(
+ 70  	 model_name	     => v_model_name,
+ 71  	 mining_function     => dbms_data_mining.classification,
+ 72  	 data_table_name     => v_data_tbl,
+ 73  	 case_id_column_name => v_case_id_col,
+ 74  	 target_column_name  => v_target_col,
+ 75  	 settings_table_name => v_model_set_tbl,
+ 76  	 xform_list	     => transform_stack);
+ 77  END;
+ 78  /
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- create view of predictions
+DMUSER@orcl 14-FEB-2021 22:52> CREATE OR REPLACE VIEW titanic_rf_test_results_full AS
+  2    SELECT PASSENGERID,
+  3  	      prediction(TITANIC_RF_MODEL_FULL USING *) predicted_value,
+  4  	      prediction_probability(TITANIC_RF_MODEL_FULL USING *) probability
+  5    FROM   titanic_test_data_vw;
+
+View created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> exec dm_create_conf_mtrx_proc( -
+>   p_matrix_tbl       => 'TITANIC_RF_CONFUSION_MATRIX_FULL', -
+>   p_apply_result_tbl => 'titanic_rf_test_results_full', -
+>   p_target_tbl       => 'titanic_test_data_vw', -
+>   p_case_id	       => 'PASSENGERID', -
+>   p_target_col       => 'SURVIVED', -
+>   p_accuracy_tbl     => 'titanic_model_accuracy', -
+>   p_model_name       => 'TITANIC_RF_MODEL_FULL');
+Dropped table: TITANIC_RF_CONFUSION_MATRIX_FULL
+**** MODEL ACCURACY ****: .8434
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> col model_name format a40
+DMUSER@orcl 14-FEB-2021 22:52> col algo_name format a30
+DMUSER@orcl 14-FEB-2021 22:52> col accuracy format 0.9990
+DMUSER@orcl 14-FEB-2021 22:52> select * from titanic_model_accuracy order by accuracy desc;
+
+MODEL_NAME                               ALGO_NAME                      ACCURACY
+---------------------------------------- ------------------------------ --------
+TITANIC_RF_MODEL_FULL                    RANDOM_FOREST                    0.8434
+TITANIC_RF_MODEL                         RANDOM_FOREST                    0.7912
+TITANIC_GLR_MODEL                        GENERALIZED_LINEAR_MODEL         0.7912
+TITANIC_SVM_MODEL                        SUPPORT_VECTOR_MACHINES          0.7775
+TITANIC_DT_MODEL                         DECISION_TREE                    0.7775
+TITANIC_NB_MODEL                         NAIVE_BAYES                      0.7527
+
+6 rows selected.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- show confusion matrix
+DMUSER@orcl 14-FEB-2021 22:52> break on report;
+DMUSER@orcl 14-FEB-2021 22:52> compute sum label 'TOTAL' of "PRED_0" "PRED_1" "TOTAL" on report;
+DMUSER@orcl 14-FEB-2021 22:52> col ACTUAL_TARGET_VALUE heading 'ACTUAL'
+DMUSER@orcl 14-FEB-2021 22:52> col PRED_0 heading 'PREDICTED|0'
+DMUSER@orcl 14-FEB-2021 22:52> col PRED_1 heading 'PREDICTED|1'
+DMUSER@orcl 14-FEB-2021 22:52> select *
+  2  FROM
+  3    (SELECT ACTUAL_TARGET_VALUE, PREDICTED_TARGET_VALUE, VALUE
+  4  	FROM   TITANIC_RF_CONFUSION_MATRIX_FULL
+  5  	UNION
+  6  	SELECT ACTUAL_TARGET_VALUE, -1 PREDICTED_TARGET_VALUE, sum(value) VALUE
+  7  	FROM   TITANIC_RF_CONFUSION_MATRIX_FULL
+  8  	GROUP BY ACTUAL_TARGET_VALUE, -1)
+  9  PIVOT (
+ 10    SUM(value)
+ 11    FOR predicted_target_value
+ 12    IN (0 "PRED_0",1 "PRED_1",-1 "TOTAL"))
+ 13  ORDER BY actual_target_value;
+
+            PREDICTED  PREDICTED
+    ACTUAL          0          1      TOTAL
+---------- ---------- ---------- ----------
+         0        213         12        225
+         1         45         94        139
+           ---------- ---------- ----------
+TOTAL             258        106        364
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- ####################
+DMUSER@orcl 14-FEB-2021 22:52> -- # Import Test Data #
+DMUSER@orcl 14-FEB-2021 22:52> -- ####################
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- drop external table
+DMUSER@orcl 14-FEB-2021 22:52> DECLARE
+  2    v_table	 VARCHAR2(30) := 'titanic_test_ext';
+  3    sql_stmt  VARCHAR2(200);
+  4  BEGIN
+  5    sql_stmt := 'drop table '|| v_table;
+  6    EXECUTE IMMEDIATE sql_stmt;
+  7    dbms_output.put_line('Dropped table: '|| v_table);
+  8  EXCEPTION
+  9    WHEN others THEN
+ 10  	 dbms_output.put_line('Table '|| v_table ||' does not exist.');
+ 11  END;
+ 12  /
+Dropped table: titanic_test_ext
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- create external table
+DMUSER@orcl 14-FEB-2021 22:52> create table titanic_test_ext (
+  2    PassengerId   NUMBER,
+  3    Pclass	     NUMBER,
+  4    Name	     VARCHAR2(128),
+  5    Sex	     VARCHAR2(8),
+  6    Age	     NUMBER,
+  7    SibSp	     NUMBER,
+  8    Parch	     NUMBER,
+  9    Ticket	     VARCHAR2(20),
+ 10    Fare	     NUMBER,
+ 11    Cabin	     VARCHAR2(15),
+ 12    Embarked      VARCHAR2(3)
+ 13  )
+ 14    organization external (
+ 15  	     type   ORACLE_LOADER
+ 16  	     default directory titanic_dir
+ 17  	     access parameters (
+ 18  		records delimited by NEWLINE
+ 19  		skip 1
+ 20  		badfile titanic_dir:'titanic_test.bad'
+ 21  		nodiscardfile
+ 22  		logfile titanic_dir:'titanic_test.log'
+ 23  		fields terminated by ',' optionally enclosed by '"'
+ 24  		reject rows with all null fields
+ 25  		(
+ 26  		  "PASSENGERID",
+ 27  		  "PCLASS",
+ 28  		  "NAME",
+ 29  		  "SEX",
+ 30  		  "AGE",
+ 31  		  "SIBSP",
+ 32  		  "PARCH",
+ 33  		  "TICKET",
+ 34  		  "FARE",
+ 35  		  "CABIN",
+ 36  		  "EMBARKED"
+ 37  		)
+ 38  	     )
+ 39  	     location ('test.csv')
+ 40    )
+ 41  reject limit unlimited;
+
+Table created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- confirm data
+DMUSER@orcl 14-FEB-2021 22:52> select count(*) from titanic_test_ext ;
+
+  COUNT(*)
+----------
+       418
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> col name format a30
+DMUSER@orcl 14-FEB-2021 22:52> select * from titanic_test_ext where rownum<=5;
+
+PASSENGERID     PCLASS NAME                           SEX             AGE      SIBSP      PARCH TICKET                     FARE CABIN           EMB
+----------- ---------- ------------------------------ -------- ---------- ---------- ---------- -------------------- ---------- --------------- ---
+        892          3 Kelly, Mr. James               male           34.5          0          0 330911                   7.8292                 Q
+        893          3 Wilkes, Mrs. James (Ellen Need female           47          1          0 363272                        7                 S
+                       s)
+
+        894          2 Myles, Mr. Thomas Francis      male             62          0          0 240276                   9.6875                 Q
+        895          3 Wirz, Mr. Albert               male             27          0          0 315154                   8.6625                 S
+        896          3 Hirvonen, Mrs. Alexander (Helg female           22          1          1 3101298                 12.2875                 S
+                       a E Lindqvist)
+
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- confirm data types
+DMUSER@orcl 14-FEB-2021 22:52> desc titanic_test_ext
+ Name                                                                                                              Null?    Type
+ ----------------------------------------------------------------------------------------------------------------- -------- ----------------------------------------------------------------------------
+ PASSENGERID                                                                                                                NUMBER
+ PCLASS                                                                                                                     NUMBER
+ NAME                                                                                                                       VARCHAR2(128)
+ SEX                                                                                                                        VARCHAR2(8)
+ AGE                                                                                                                        NUMBER
+ SIBSP                                                                                                                      NUMBER
+ PARCH                                                                                                                      NUMBER
+ TICKET                                                                                                                     VARCHAR2(20)
+ FARE                                                                                                                       NUMBER
+ CABIN                                                                                                                      VARCHAR2(15)
+ EMBARKED                                                                                                                   VARCHAR2(3)
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- create internal table to improve performance
+DMUSER@orcl 14-FEB-2021 22:52> DECLARE
+  2    v_table	 VARCHAR2(30) := 'titanic_test';
+  3    sql_stmt  VARCHAR2(200);
+  4  BEGIN
+  5    sql_stmt := 'drop table '|| v_table;
+  6    EXECUTE IMMEDIATE sql_stmt;
+  7    dbms_output.put_line('Dropped table: '|| v_table);
+  8  EXCEPTION
+  9    WHEN others THEN
+ 10  	 dbms_output.put_line('Table '|| v_table ||' does not exist.');
+ 11  END;
+ 12  /
+Dropped table: titanic_test
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> create table titanic_test as
+  2    select * from titanic_test_ext;
+
+Table created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- confirm data
+DMUSER@orcl 14-FEB-2021 22:52> select count(*) from titanic_test;
+
+  COUNT(*)
+----------
+       418
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> col name format a30
+DMUSER@orcl 14-FEB-2021 22:52> select * from titanic_test where rownum<=5;
+
+PASSENGERID     PCLASS NAME                           SEX             AGE      SIBSP      PARCH TICKET                     FARE CABIN           EMB
+----------- ---------- ------------------------------ -------- ---------- ---------- ---------- -------------------- ---------- --------------- ---
+        892          3 Kelly, Mr. James               male           34.5          0          0 330911                   7.8292                 Q
+        893          3 Wilkes, Mrs. James (Ellen Need female           47          1          0 363272                        7                 S
+                       s)
+
+        894          2 Myles, Mr. Thomas Francis      male             62          0          0 240276                   9.6875                 Q
+        895          3 Wirz, Mr. Albert               male             27          0          0 315154                   8.6625                 S
+        896          3 Hirvonen, Mrs. Alexander (Helg female           22          1          1 3101298                 12.2875                 S
+                       a E Lindqvist)
+
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- confirm data types
+DMUSER@orcl 14-FEB-2021 22:52> desc titanic_test
+ Name                                                                                                              Null?    Type
+ ----------------------------------------------------------------------------------------------------------------- -------- ----------------------------------------------------------------------------
+ PASSENGERID                                                                                                                NUMBER
+ PCLASS                                                                                                                     NUMBER
+ NAME                                                                                                                       VARCHAR2(128)
+ SEX                                                                                                                        VARCHAR2(8)
+ AGE                                                                                                                        NUMBER
+ SIBSP                                                                                                                      NUMBER
+ PARCH                                                                                                                      NUMBER
+ TICKET                                                                                                                     VARCHAR2(20)
+ FARE                                                                                                                       NUMBER
+ CABIN                                                                                                                      VARCHAR2(15)
+ EMBARKED                                                                                                                   VARCHAR2(3)
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- stats overview
+DMUSER@orcl 14-FEB-2021 22:52> exec dm_create_stats_tbl_proc('DMUSER','titanic_test');
+Table titanic_test_char_stats has been dropped
+Table titanic_test_num_stats has been dropped
+select max(DATA_LENGTH)
+                   from all_tab_cols where owner=upper('DMUSER')
+                   and table_name=upper('titanic_test')
+                   and DATA_TYPE='VARCHAR2'
+Max data length is 128
+CREATE TABLE titanic_test_num_stats (
+      COLUMN_NAME VARCHAR2(128),
+      "COUNT" NUMBER,
+      mean    NUMBER,
+      std     NUMBER,
+      "MIN"   NUMBER,
+      "25%"   NUMBER,
+      "50%"
+NUMBER,
+      "75%"   NUMBER,
+      "MAX"   NUMBER)
+CREATE TABLE titanic_test_char_stats (
+      COLUMN_NAME VARCHAR2(128),
+      "COUNT"  NUMBER,
+      "UNIQUE" NUMBER,
+      top    VARCHAR2(128),
+      freq   NUMBER)
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> exec dm_populate_stats_tbl_proc(-
+>   p_owner    => 'DMUSER',-
+>   p_data_tbl => 'titanic_test',-
+>   p_num_tbl  => 'titanic_test_num_stats',-
+>   p_char_tbl => 'titanic_test_char_stats');
+Truncated: titanic_test_num_stats
+Truncated: titanic_test_char_stats
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- ###################
+DMUSER@orcl 14-FEB-2021 22:52> -- # Apply the model #
+DMUSER@orcl 14-FEB-2021 22:52> -- ###################
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- Create view with only desired columns
+DMUSER@orcl 14-FEB-2021 22:52> CREATE OR REPLACE VIEW titanic_test_vw AS
+  2    SELECT PASSENGERID, PCLASS, SEX,
+  3  	      AGE, SIBSP, PARCH, FARE, EMBARKED
+  4    FROM   titanic_test;
+
+View created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> select * from titanic_test_vw where rownum<6;
+
+PASSENGERID     PCLASS SEX             AGE      SIBSP      PARCH       FARE EMB
+----------- ---------- -------- ---------- ---------- ---------- ---------- ---
+        892          3 male           34.5          0          0     7.8292 Q
+        893          3 female           47          1          0          7 S
+        894          2 male             62          0          0     9.6875 Q
+        895          3 male             27          0          0     8.6625 S
+        896          3 female           22          1          1    12.2875 S
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- drop results table
+DMUSER@orcl 14-FEB-2021 22:52> DECLARE
+  2    drop_sql    VARCHAR2(500);
+  3  BEGIN
+  4    drop_sql := 'drop table titanic_test_results';
+  5    execute immediate drop_sql;
+  6    dbms_output.put_line('Dropped: titanic_test_results');
+  7  EXCEPTION
+  8    WHEN others THEN
+  9  	 dbms_output.put_line('Table titanic_test_results does not exist.');
+ 10  END;
+ 11  /
+Dropped: titanic_test_results
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- apply model to full data
+DMUSER@orcl 14-FEB-2021 22:52> begin
+  2    DBMS_DATA_MINING.APPLY (
+  3  	 model_name	      => 'TITANIC_RF_MODEL_FULL',
+  4  	 data_table_name      => 'titanic_test_vw',
+  5  	 case_id_column_name  => 'PASSENGERID',
+  6  	 result_table_name    => 'titanic_test_results',
+  7  	 data_schema_name     => 'DMUSER');
+  8  end;
+  9  /
+
+PL/SQL procedure successfully completed.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- Do a quick check of the results
+DMUSER@orcl 14-FEB-2021 22:52> select count(*) from titanic_test_results;
+
+  COUNT(*)
+----------
+       836
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> col probability format 0.9990
+DMUSER@orcl 14-FEB-2021 22:52> col cost format 0.9990
+DMUSER@orcl 14-FEB-2021 22:52> select * from titanic_test_results where rownum<6;
+
+PASSENGERID PREDICTION PROBABILITY    COST
+----------- ---------- ----------- -------
+        892          0      0.9042  0.0958
+        892          1      0.0958  0.9042
+        893          1      0.5117  0.4883
+        893          0      0.4883  0.5117
+        894          0      0.8947  0.1053
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- create view of predictions greater than 50%
+DMUSER@orcl 14-FEB-2021 22:52> create or replace view titanic_test_results_vm as
+  2    select PASSENGERID, PREDICTION survived
+  3    from titanic_test_results
+  4    where PROBABILITY > 0.5;
+
+View created.
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> -- confirm we have predictions for every record
+DMUSER@orcl 14-FEB-2021 22:52> select tbl.passengerid
+  2  from titanic_test tbl
+  3  where not exists
+  4    (select '1'
+  5  	from titanic_test_results_vm vw
+  6  	where vw.passengerid=tbl.passengerid)
+  7  order by 1;
+
+no rows selected
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> select * from titanic_test_results_vm where rownum<6;
+
+PASSENGERID   SURVIVED
+----------- ----------
+        892          0
+        893          1
+        894          0
+        895          0
+        896          0
+
+DMUSER@orcl 14-FEB-2021 22:52> 
+DMUSER@orcl 14-FEB-2021 22:52> SPOOL OFF
